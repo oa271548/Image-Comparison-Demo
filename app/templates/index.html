@@ -1,0 +1,150 @@
+{% extends "public_template.html" %}
+
+{% block title %} Image Comparison Demo {% endblock %}
+
+{% block main %}
+
+<div class="container">
+  <div class="row">
+    <div class="col">
+      <h1 class="mb-4">Image Comparison Demo</h1>
+
+      <form id="myform" action="/compare" method="POST" enctype="multipart/form-data">
+        <div class="form-group mb-3">
+          <h3 class="mb-2">
+            Upload 2 images to compare
+          </h3>
+
+          <div class="input-group row">
+            <div class="image-file mb-3 col">
+              <!-- <label for="left_img" class="image-file-label form-label">Select image...</label> -->
+              <input type="file" class="image-file-input form-control" name="left_img" id="left_img">
+            </div>
+            <div class="image-file mb-3 col">
+              <!-- <label for="right_img" class="image-file-label form-label">Select image...</label> -->
+              <input type="file" class="image-file-input form-control" name="right_img" id="right_img">
+            </div>
+          </div>
+
+          <div class="input-group row mb-3">
+            <label class="col-3">
+              Image comparison algorithm
+            </label>
+            <div class="form-check col-1">
+              <input class="form-check-input" type="radio" name="algorithm" value="alg_ssim" checked>
+              <label class="form-check-label" for="alg_ssim">
+                SSIM
+              </label>
+            </div>
+            <div class="form-check col-1">
+              <input class="form-check-input" type="radio" name="algorithm" value="alg_absdiff">
+              <label class="form-check-label" for="alg_absdiff">
+                AbsDiff
+              </label>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Compare</button>
+
+        </div>
+      </form>
+
+      <canvas id="result"></canvas>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block script %}
+<script>
+  let left_img_ele = document.querySelector('#left_img');
+  let right_img_ele = document.querySelector('#right_img');
+  let left_img, right_img;
+  let canvas = document.querySelector('#result');
+  let ctx = canvas.getContext('2d');
+  let radio_eles = document.querySelectorAll('input[name="algorithm"]')
+
+  left_img_ele.addEventListener('change', (event) => {
+    if (event.target.files) {
+      let file = event.target.files[0];
+      var reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onloadend = (e) => {
+        left_img = new Image();
+        left_img.src = e.target.result;
+        left_img.onload = (ev) => {
+          if (canvas.width != left_img.width * 2) {
+            canvas.width = left_img.width * 2;
+            canvas.height = left_img.height;
+          }
+          ctx.drawImage(left_img, 0, 0);
+        };
+      };
+    }
+  });
+
+  right_img_ele.addEventListener('change', (event) => {
+    if (event.target.files) {
+      let file = event.target.files[0];
+      var reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onloadend = (e) => {
+        right_img = new Image();
+        right_img.src = e.target.result;
+        right_img.onload = (ev) => {
+          if (canvas.width != right_img.width * 2) {
+            canvas.width = right_img.width * 2;
+            canvas.height = right_img.height;
+          }
+          ctx.drawImage(right_img, right_img.width, 0);
+        };
+      };
+    }
+  });
+
+  document.forms['myform'].addEventListener('submit', async (event) => {
+    event.preventDefault();
+    formdata = new FormData(event.target);
+    formdata.append('left_img', document.querySelector('#left_img').files[0])
+    formdata.append('right_img', document.querySelector('#right_img').files[0])
+    const resp = await fetch(event.target.action, {
+      method: 'POST',
+      body: formdata,
+    },
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+    if (resp.status != 200) {
+      console.log('Response status is not 200:', response.status)
+      return;
+    }
+    diff_areas = await resp.json();
+    drawAreas(diff_areas)
+  })
+
+  function drawAreas(diff_areas) {
+    for (const area of diff_areas) {
+      const x = area.x;
+      const y = area.y;
+      const w = area.w;
+      const h = area.h;
+      ctx.beginPath();
+      ctx.rect(x, y, w, h);
+      ctx.rect(x + left_img.width, y, w, h);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgb(36, 255, 12)';
+      ctx.stroke();
+    }
+  }
+
+  for (const radio_ele of radio_eles) {
+    radio_ele.addEventListener('change', (event) => {
+      ctx.drawImage(left_img, 0, 0);
+      ctx.drawImage(right_img, right_img.width, 0);
+    })
+  }
+</script>
+{% endblock %}
